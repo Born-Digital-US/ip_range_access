@@ -1,0 +1,12 @@
+{
+    "name": "born-digital-us/ip_range_access",
+    "description": "Restricts access to an allowed list of IP addresses",
+    "type": "drupal-module",
+    "authors": [
+        {
+            "name": "Jenz Ekedahl",
+            "email": "info@deuxcode.com"
+        }
+    ],
+    "require": {}
+}
