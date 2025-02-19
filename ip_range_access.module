@@ -1,0 +1,47 @@
+<?php
+
+/**
+ * @file
+ * Contains ip_range_access.module.
+ */
+
+use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Form\FormStateInterface;
+
+/**
+ * Implements hook_form_form_id_alter().
+ */
+function ip_range_acces_form_block_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  unset($form['visibility']['user_ip_address']);
+}
+
+/**
+ * Implements hook_entity_view().
+ */
+function ip_range_access_entity_view(array &$build, EntityInterface $entity, EntityViewDisplayInterface $display, $view_mode) {
+  $route_match_item = \Drupal::routeMatch()->getParameters()->all();
+  // Get the parameter, which might be node, media or taxonomy term.
+  $current_entity = reset($route_match_item);
+  // Match exactly to ensure they are the same entity type.
+  if ($entity === $current_entity) {
+    if (\Drupal::moduleHandler()->moduleExists('context')) {
+      $context_manager = \Drupal::service('context.manager');
+      // If there are multiple contexts that block access, it's OK to use the first one.
+      foreach ($context_manager->getActiveReactions('\Drupal\ip_range_access\Plugin\ContextReaction\DenyAccessReaction') as $reaction) {
+        $reaction->execute();
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_form_form_id_alter().
+ */
+function ip_range_access_form_block_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  // Remove this condition from the core block placement UI. Use
+  // /admin/structure/context instead if you want to use this condition
+  // to alter block layout.
+  unset($form['visibility']['user_ip_address']);
+}
+
