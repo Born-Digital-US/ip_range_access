@@ -36,6 +36,21 @@ function ip_range_access_entity_view(array &$build, EntityInterface $entity, Ent
 }
 
 /**
+ * Implements hook_entity_view_alter().
+ */
+function ip_range_access_entity_view_alter(array &$build, EntityInterface $entity, EntityViewDisplayInterface $display) {
+  $context_id = 'metadata_only_for_ip_restricted';
+  $active_contexts = \Drupal::service('context.manager')->getActiveContexts();
+
+  // Disable object navigation links when context is active.
+  foreach ($active_contexts as $machine_name => $context_active) {
+    if ($machine_name === $context_id) {
+      $build['object_navigation']['#access'] = FALSE;
+    }
+  }
+}
+
+/**
  * Implements hook_form_form_id_alter().
  */
 function ip_range_access_form_block_form_alter(&$form, FormStateInterface $form_state, $form_id) {
@@ -45,3 +60,84 @@ function ip_range_access_form_block_form_alter(&$form, FormStateInterface $form_
   unset($form['visibility']['user_ip_address']);
 }
 
+/**
+ * Control access to private file downloads and specify HTTP headers.
+ *
+ * @param $uri
+ *   The URI of the file.
+ *
+ * @return string[]|int
+ *   If the user does not have permission to access the file, return -1. If the
+ *   user has permission, return an array with the appropriate headers. If the
+ *   file is not controlled by the current module, the return value should be
+ *   NULL.
+ *
+ * @see \Drupal\system\FileDownloadController::download()
+ */
+function ip_range_access_file_download($uri) {
+
+  /** @var \Drupal\file\FileRepositoryInterface $file_repository */
+  $file_repository = \Drupal::service('file.repository');
+  $file = $file_repository->loadByUri($uri);
+
+  if (!$file) {
+    return NULL;
+  }
+
+  // Machine name of the "IP Restricted" context.
+  $context_id = 'metadata_only_for_ip_restricted';
+
+  /** @var \Drupal\islandora\IslandoraContextManager $context_manager */
+  /** @var \Drupal\context\Entity\Context $context */
+  $context = \Drupal::service('context.manager')->getContext($context_id);
+  $conditions = $context->getConditions();
+
+  // Evaluate presence of the context's access term.
+  $file_is_ip_restricted = FALSE;
+
+  $usage = \Drupal::service('file.usage')->listUsage($file);
+  $term_condition_uri = $conditions->get('node_has_term')->getConfiguration()['uri'];
+  $entity_type_manager = \Drupal::service('entity_type.manager');
+
+  if (!empty($usage['file']['media'])) {
+    foreach ($usage['file']['media'] as $media_id => $usage_count) {
+      $media = $entity_type_manager->getStorage('media')->load($media_id);
+      $node = \Drupal::service('islandora.utils')->getParentNode($media);
+
+      if($node?->hasField('field_access_terms')) {
+        foreach ($node->get('field_access_terms') as $term) {
+          $term_id = $term->target_id;
+
+          if ($term_id) {
+            $term = $entity_type_manager->getStorage('taxonomy_term')->load($term_id);
+            $term_uri = $term?->get('field_external_uri')?->uri;
+
+            // Check if the node access term uri matches the term uri in the
+            // context. If yes, the node is IP restricted.
+            $file_is_ip_restricted = $term_uri === $term_condition_uri;
+            break 2;
+          }
+        }
+      }
+    }
+  }
+
+  // If the file is IP restricted determined by the access terms on the node,
+  // and the user does not have either IP or Role access, return access denied.
+  if ($file_is_ip_restricted) {
+
+    // Evaluate user IP (type cast due to null instead of false).
+    $hasIp = (bool) $conditions->get('user_ip_address')->evaluate();
+
+    // Evaluate user role(s).
+    $conditionRoles = $conditions->get('user_role')->getConfiguration()['roles'];
+    $user_roles = \Drupal::currentUser()->getRoles();
+    $hasRole = (bool) count(array_intersect($conditionRoles, $user_roles));
+
+    if (!($hasIp || $hasRole)) {
+      return -1;
+    }
+  }
+
+  // Returning nothing so that other modules can handle additional access.
+}
