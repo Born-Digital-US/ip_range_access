@@ -31,6 +31,26 @@ function ip_range_access_entity_view(array &$build, EntityInterface $entity, Ent
       foreach ($context_manager->getActiveReactions('\Drupal\ip_range_access\Plugin\ContextReaction\DenyAccessReaction') as $reaction) {
         $reaction->execute();
       }
+
+      // Disable cache for IP Restricted nodes.
+      $term_external_url = 'http://example.org/ip-restricted';
+
+      if ($current_entity?->hasField('field_access_terms')) {
+        $entity_type_manager = \Drupal::service('entity_type.manager');
+
+        foreach ($current_entity->get('field_access_terms') as $term) {
+          if ($term->target_id) {
+            $term = $entity_type_manager->getStorage('taxonomy_term')->load($term->target_id);
+            $term_uri = $term?->get('field_external_uri')?->uri;
+
+            if ($term_uri === $term_external_url) {
+              $build['#cache']['max-age'] = 0;
+              \Drupal::service('page_cache_kill_switch')->trigger();
+              break;
+            }
+          }
+        }
+      }
     }
   }
 }
