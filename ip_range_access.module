@@ -8,6 +8,8 @@
 use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\ip_range_access\IpUtil;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Implements hook_form_form_id_alter().
@@ -31,26 +33,31 @@ function ip_range_access_entity_view(array &$build, EntityInterface $entity, Ent
       foreach ($context_manager->getActiveReactions('\Drupal\ip_range_access\Plugin\ContextReaction\DenyAccessReaction') as $reaction) {
         $reaction->execute();
       }
+    }
+  }
 
-      // Disable cache for IP Restricted nodes.
-      $term_external_url = 'http://example.org/ip-restricted';
+  // Disable cache for IP Restricted nodes.
+  if ((new IpUtil)->isEntityProtected($entity)) {
+    $build['#cache']['max-age'] = 0;
+    \Drupal::service('page_cache_kill_switch')->trigger();
+  }
 
-      if ($current_entity?->hasField('field_access_terms')) {
-        $entity_type_manager = \Drupal::service('entity_type.manager');
+  // Check access to /ocr and /pages.
+  if (
+    ($current_entity === 'display_media' && $route_match_item['display_id'] === 'ocr') ||
+    ($current_entity === 'manage_members' && $route_match_item['display_id'] === 'page_3')
+  ) {
+    $node_id = $route_match_item['node'] ?? NULL;
+    $node = \Drupal::entityTypeManager()->getStorage('node')->load($node_id);
+    $isAccessGranted = (new IpUtil)->isAccessGranted($node);
 
-        foreach ($current_entity->get('field_access_terms') as $term) {
-          if ($term->target_id) {
-            $term = $entity_type_manager->getStorage('taxonomy_term')->load($term->target_id);
-            $term_uri = $term?->get('field_external_uri')?->uri;
+    if ((new IpUtil)->isEntityProtected($node)) {
+      $build['#cache']['max-age'] = 0;
+      \Drupal::service('page_cache_kill_switch')->trigger();
+    }
 
-            if ($term_uri === $term_external_url) {
-              $build['#cache']['max-age'] = 0;
-              \Drupal::service('page_cache_kill_switch')->trigger();
-              break;
-            }
-          }
-        }
-      }
+    if (!$isAccessGranted) {
+      throw new NotFoundHttpException();
     }
   }
 }
@@ -59,12 +66,11 @@ function ip_range_access_entity_view(array &$build, EntityInterface $entity, Ent
  * Implements hook_entity_view_alter().
  */
 function ip_range_access_entity_view_alter(array &$build, EntityInterface $entity, EntityViewDisplayInterface $display) {
-  $context_id = 'metadata_only_for_ip_restricted';
   $active_contexts = \Drupal::service('context.manager')->getActiveContexts();
 
   // Disable object navigation links when context is active.
   foreach ($active_contexts as $machine_name => $context_active) {
-    if ($machine_name === $context_id) {
+    if ($machine_name === IpUtil::CONTEXT_ID) {
       $build['object_navigation']['#access'] = FALSE;
     }
   }
@@ -104,58 +110,18 @@ function ip_range_access_file_download($uri) {
     return NULL;
   }
 
-  // Machine name of the "IP Restricted" context.
-  $context_id = 'metadata_only_for_ip_restricted';
-
-  /** @var \Drupal\islandora\IslandoraContextManager $context_manager */
-  /** @var \Drupal\context\Entity\Context $context */
-  $context = \Drupal::service('context.manager')->getContext($context_id);
-  $conditions = $context->getConditions();
-
-  // Evaluate presence of the context's access term.
-  $file_is_ip_restricted = FALSE;
-
   $usage = \Drupal::service('file.usage')->listUsage($file);
-  $term_condition_uri = $conditions->get('node_has_term')->getConfiguration()['uri'];
   $entity_type_manager = \Drupal::service('entity_type.manager');
 
   if (!empty($usage['file']['media'])) {
     foreach ($usage['file']['media'] as $media_id => $usage_count) {
       $media = $entity_type_manager->getStorage('media')->load($media_id);
       $node = \Drupal::service('islandora.utils')->getParentNode($media);
+      $isAccessGranted = (new IpUtil)->isAccessGranted($node);
 
-      if($node?->hasField('field_access_terms')) {
-        foreach ($node->get('field_access_terms') as $term) {
-          $term_id = $term->target_id;
-
-          if ($term_id) {
-            $term = $entity_type_manager->getStorage('taxonomy_term')->load($term_id);
-            $term_uri = $term?->get('field_external_uri')?->uri;
-
-            // Check if the node access term uri matches the term uri in the
-            // context. If yes, the node is IP restricted.
-            $file_is_ip_restricted = $term_uri === $term_condition_uri;
-            break 2;
-          }
-        }
+      if (!$isAccessGranted) {
+        return -1; // Return access denied.
       }
-    }
-  }
-
-  // If the file is IP restricted determined by the access terms on the node,
-  // and the user does not have either IP or Role access, return access denied.
-  if ($file_is_ip_restricted) {
-
-    // Evaluate user IP (type cast due to null instead of false).
-    $hasIp = (bool) $conditions->get('user_ip_address')->evaluate();
-
-    // Evaluate user role(s).
-    $conditionRoles = $conditions->get('user_role')->getConfiguration()['roles'];
-    $user_roles = \Drupal::currentUser()->getRoles();
-    $hasRole = (bool) count(array_intersect($conditionRoles, $user_roles));
-
-    if (!($hasIp || $hasRole)) {
-      return -1;
     }
   }
 
