@@ -117,6 +117,9 @@ function ip_range_access_file_download($uri) {
     foreach ($usage['file']['media'] as $media_id => $usage_count) {
       $media = $entity_type_manager->getStorage('media')->load($media_id);
       $node = \Drupal::service('islandora.utils')->getParentNode($media);
+      if (!$node) {
+        continue;
+      }
       $isAccessGranted = (new IpUtil)->isAccessGranted($node);
 
       if (!$isAccessGranted) {
