@@ -28,13 +28,24 @@ class UserIpAddress extends ConditionPluginBase {
    * {@inheritdoc}
    */
   public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
+    // Disable the form if using bd_sass_admin_form
+    $disabled = \Drupal::moduleHandler()->moduleExists('bd_saas_admin_form') ? TRUE : FALSE;
+    $form['#disabled'] = $disabled;
+
+    if ($disabled) {
+      $description_text = $this->t('Form is disabled for the bd_saas_admin_form module. Use the <a href="/admin/config/system/site-information">site settings form</a> to set the IP address ranges instead.');
+    }
+    else {
+      $description_text = $this->t('Enter the IP address ranges, one per line, that are allowed to view objects. ' .
+        'Separate the low and high ends of each range with a colon, e.g. 111.111.111.111:222.222.222.222. ' .
+        ' Asterisks are not allowed. Single IP addresses are also allowed, each on its own line.');
+    }
+
     $form['ip_ranges'] = [
       '#type' => 'textarea',
       '#title' => $this->t('IP ranges'),
       '#default_value' => $this->configuration['ip_ranges'],
-      '#description' => $this->t('Enter the IP address ranges, one per line, that are allowed to view objects. ' .
-        'Separate the low and high ends of each range with a colon, e.g. 111.111.111.111:222.222.222.222. ' .
-        ' Asterisks are not allowed. Single IP addresses are also allowed, each on its own line.'),
+      '#description' => $description_text,
     ];
     $form['log_requests'] = [
       '#type' => 'checkbox',
@@ -42,6 +53,7 @@ class UserIpAddress extends ConditionPluginBase {
       '#default_value' => $this->configuration['log_requests'],
       '#description' => $this->t("Log users' requests."),
     ];
+
     return parent::buildConfigurationForm($form, $form_state);
   }
 
