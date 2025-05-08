@@ -35,7 +35,23 @@ class IpUtil {
   /**
    * Returns TRUE if an entity is IP restricted.
    */
-  public function isEntityProtected(ContentEntityInterface $entity): bool {
+  public function isEntityProtected(ContentEntityInterface $entity, $view_mode = 'default'): bool {
+
+    if ($entity->bundle() !== 'islandora_object') {
+      return FALSE;
+    }
+
+    if (in_array($view_mode, [
+      'collection',
+      'metadata_only',
+      'newspaper',
+      'search_index',
+      'search_result',
+      'teaser',
+    ])) {
+      return FALSE;
+    }
+
     if (!$this->getContext() || !$entity->hasField('field_access_terms')) {
       return FALSE;
     }
@@ -62,8 +78,8 @@ class IpUtil {
   /**
    * Returns TRUE if access is granted for the node.
    */
-  public function isAccessGranted(ContentEntityInterface $entity): bool {
-    if (!$this->isEntityProtected($entity)) {
+  public function isAccessGranted(ContentEntityInterface $entity, $view_mode = 'default'): bool {
+    if (!$this->isEntityProtected($entity, $view_mode)) {
       return TRUE;
     }
 

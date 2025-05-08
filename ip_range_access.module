@@ -37,7 +37,7 @@ function ip_range_access_entity_view(array &$build, EntityInterface $entity, Ent
   }
 
   // Disable cache for IP Restricted nodes.
-  if ((new IpUtil)->isEntityProtected($entity)) {
+  if ((new IpUtil)->isEntityProtected($entity,  $view_mode)) {
     $build['#cache']['max-age'] = 0;
     \Drupal::service('page_cache_kill_switch')->trigger();
   }
