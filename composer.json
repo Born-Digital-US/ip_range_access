@@ -1,5 +1,5 @@
 {
-    "name": "born-digital-us/ip_range_access",
+    "name": "born-digital/ip_range_access",
     "description": "Restricts access to an allowed list of IP addresses",
     "type": "drupal-module",
     "authors": [
