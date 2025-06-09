@@ -5,7 +5,13 @@
     "authors": [
         {
             "name": "Jenz Ekedahl",
-            "email": "info@deuxcode.com"
+            "email": "info@deuxcode.com",
+            "role": "Developer"
+        },
+        {
+            "name": "Born-Digital",
+            "email": "hello@born-digital.com",
+            "role": "Maintainer"
         }
     ],
     "require": {}
