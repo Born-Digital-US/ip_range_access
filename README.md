@@ -25,13 +25,13 @@ The Condition and Reaction are independent of each other (Context FTW!) but if y
 1. Choose the "Deny access to node or media" Reaction and check the box.
     * (Optional) Add the URL of a proxy, such as Ezproxy, to the reaction's configuration, e.g., `https://proxy.example.com/login?url=`.
 
-## To do
+## Sponsors
 
-See [issue list](https://github.com/mjordan/ip_range_access/issues).
+This work was made possible via the generous contribution of [Boston College](https://ur.bc.edu/).
 
 ## Current maintainer
 
-* [Mark Jordan](https://github.com/mjordan)
+* [Born-Digital](https://born-digital.com)
 
 ## Contributing
 
